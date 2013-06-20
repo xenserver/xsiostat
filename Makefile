@@ -1,3 +1,4 @@
+DESTDIR ?= /usr/sbin
 TARGET = xsiostat
 OBJS = xsiostat.o xsiostat_sysfs.o
 
@@ -16,3 +17,7 @@ $(TARGET): $(OBJS)
 .PHONY: clean
 clean:
 	rm -f $(TARGET) $(OBJS)
+
+.PHONY: install
+.install: $(TARGET)
+	install -D $(TARGET) $(DESTDIR)/$(TARGET)
