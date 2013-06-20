@@ -19,5 +19,5 @@ clean:
 	rm -f $(TARGET) $(OBJS)
 
 .PHONY: install
-.install: $(TARGET)
+install: $(TARGET)
 	install -D $(TARGET) $(DESTDIR)/$(TARGET)
