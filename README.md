@@ -41,3 +41,10 @@ It relies on specific entries to be available on sysfs, some of which were
 only introduced in XenServer 6.1.0. It will fail to run on earlier releases.
 Currently, plugging more VBDs or unplugging currently attached VBDs will
 cause xsiostat to either produce incomplete information or to quit.
+
+Known Issues
+------------
+
+* Consider requests merged
+* Finish the data output code (writing to a datafile does nothing atm)
+* Implement datafile read code (there is no way to read a datafile)
