@@ -1,9 +1,9 @@
 DESTDIR ?= /usr/sbin
 TARGET = xsiostat
-OBJS = xsiostat.o xsiostat_sysfs.o
+OBJS = xsiostat.o xsiostat_vbd.o xsiostat_flt.o
 
 CC = gcc
-CFLAGS = -Wall -O3 -s
+CFLAGS = -Wall -O3
 
 .PHONY: build
 build: $(TARGET)

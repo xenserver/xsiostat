@@ -5,7 +5,7 @@
  *  xsiostat.h
  * ------------
  *
- * Copyright (C) 2013 Citrix Systems Inc.
+ * Copyright (C) 2013, 2014 Citrix Systems Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published
@@ -16,124 +16,99 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Lesser General Public License for more details.
- *
  */
 
+// Required headers
+#include <stdint.h>
+#include <unistd.h>
+#include <sys/queue.h>
+
 // Global definitions
-#define MT_PROGNAME		"XenServer Storage I/O Stats"
-#define MT_PROGNAME_LEN		strlen(MT_PROGNAME)
+#define XSIS_PROGNAME           "XenServer Storage I/O Stats"
+#define XSIS_PROGNAME_LEN       strlen(XSIS_PROGNAME)
 
-#define	MT_INTERVAL		1000	// Default interval between outputs (ms)
-#define	MT_SECTOR_SZ		512	// Bytes per sector
-#define	MT_SYSFS_XENBK		"/sys/devices/xen-backend"
-#define	MT_SYSFS_XENBK_PREFIX	"vbd"
-#define	MT_SYSFS_XENBK_IORING	"io_ring"
-#define	MT_SYSFS_XENBK_PHYSDEV	"physical_device"
-#define	MT_SYSFS_XENBK_PGPOOL	"page_pool"
+#define XSIS_VBD3_DIR           "/dev/shm/"
+#define XSIS_VBD3_BASEFMT       "vbd3-%u-%u" // domid, vbdid
+#define XSIS_VBD3_PATHFMT       XSIS_VBD3_DIR XSIS_VBD3_BASEFMT "/statistics"
 
-#define	MT_SYSFS_TD_PREFIX	"/sys/block/td"
-#define	MT_SYSFS_TD_INFLIGHT	"inflight"
-#define	MT_SYSFS_TD_STAT	"stat"
+#define	XSIS_INTERVAL           1000    // Default report interval (ms)
+#define	XSIS_SECTOR_SZ          512     // Bytes per sector
 
-#define	MT_SYSFS_BBPOOL		"/sys/kernel/blkback-pools"
+// Tapdisk stats (from shm page)
+typedef struct _xsis_tdstat_t {
+    uint64_t            rop_0;          // read requests completed now
+    uint64_t            rop_1;          // read requests completed last time
+    uint64_t            rsc_0;          // read sectors completed now
+    uint64_t            rsc_1;          // read sectors completed last time
+    uint64_t            wop_0;          // write requests completed now
+    uint64_t            wop_1;          // write requests completed last time
+    uint64_t            wsc_0;          // write sectors completed now
+    uint64_t            wsc_1;          // write sectors completed last time
+    uint64_t            rtu_0;          // read ticks in usec now
+    uint64_t            rtu_1;          // read ticks in usec last time
+    uint64_t            wtu_0;          // write ticks in usec now
+    uint64_t            wtu_1;          // write ticks in usec last time
+    uint32_t            infrd;          // read requests inflight
+    uint32_t            infwr;          // write requests inflight
+} xsis_tdstat_t;
 
-#define	MT_SYSFS_BBPOOL_SIZE	"size"
-#define	MT_SYSFS_BBPOOL_FREE	"free"
+// VBD general entry
+typedef struct _xsis_vbd_t {
+    uint32_t            domid;          // domain id owning this vbd
+    uint32_t            vbdid;          // vbd id
+    int32_t             shmfd;          // shared memory stats fd
+    void                *shmmap;        // shared memory stats mapping
+    xsis_tdstat_t       tdstat;         // tapdisk stat information
+    LIST_ENTRY(_xsis_vbd_t) vbds;       // list
+} xsis_vbd_t;
 
-// Include tapdisk statistics
-//#define	MT_USE_TAPDISK		1
+// Filter general entry
+typedef struct _xsis_flt_t {
+    uint32_t            filter;         // filter id
+    LIST_ENTRY(_xsis_flt_t) flts;       // list
+} xsis_flt_t;
 
-#ifdef	__GNUC__
-#define likely(x)		__builtin_expect(!!(x),1)
-#define unlikely(x)		__builtin_expect(!!(x),0)
-#else
-#define likely(x)		(x)
-#define unlikely(x)		(x)
-#endif	/* __GNUC__ */
+// Lists
+typedef LIST_HEAD(xsis_vbds, _xsis_vbd_t) xsis_vbds_t;
+typedef LIST_HEAD(xsis_flts, _xsis_flt_t) xsis_flts_t;
 
-// blkback io_ring data
-typedef struct _mt_bbstat_t {
-	FILE *			ringfp;	// blkback sysfs/io_ring file pointer
-	uint32_t		iorsz;	// blkback io_ring size
-	uint32_t		ioreq;	// blkback io_ring req prod
-	uint32_t		iorsp;	// blkback io_ring rsp prod
-} mt_bbstat_t;
-
-// blktap sysfs data
-typedef struct _mt_btstat_t {
-	FILE *			statfp;	// blktap sysfs/stat file pointer
-	uint32_t		minor;	// blktap minor number
-	uint32_t		rds_0;	// read requests completed now
-	uint32_t		rds_1;	// read requests completed last time
-	uint32_t		rsc_0;	// read sectors completed now
-	uint32_t		rsc_1;	// read sectors completed last time
-	uint32_t		wrs_0;	// write requests completed now
-	uint32_t		wrs_1;	// write requests completed last time
-	uint32_t		wsc_0;	// write sectors completed now
-	uint32_t		wsc_1;	// write sectors completed last time
-	FILE *			inflfp;	// blktap sysfs/inflight file pointer
-	uint32_t		infrd;	// read requests inflight
-	uint32_t		infwr;	// write requests inflight
-} mt_btstat_t;
-
-#ifdef	MT_USE_TAPDISK
-// tapdisk data (from ctl socket)
-typedef struct _mt_tdstat_t {
-	char *			tdcfn;	// tapdisk ctl socket file name
-	uint64_t		rds_0;	// read requests completed now
-	uint64_t		rds_1;	// read requests completed last time
-	uint64_t		rsc_0;	// read sectors completed now
-	uint64_t		rsc_1;	// read sectors completed last time
-	uint64_t		wrs_0;	// write requests completed now
-	uint64_t		wrs_1;	// write requests completed last time
-	uint64_t		wsc_0;	// write sectors completed now
-	uint64_t		wsc_1;	// write sectors completed last time
-	uint32_t		infrd;	// read requests inflight
-	uint32_t		infwr;	// write requests inflight
-} mt_tdstat_t;
-#endif	/* MT_USE_TAPDISK */
-
-// vbd general entry
-typedef struct _mt_vbd_t {
-	int32_t			domid;	// domain id owning this vbd
-	int32_t			vbdid;	// vbd id
-	mt_bbstat_t		bbstat;	// blkback stat information
-	mt_btstat_t		btstat;	// blktap stat information
-#ifdef	MT_USE_TAPDISK
-	mt_tdstat_t		tdstat;	// tapdisk stat information
-#endif	/* MT_USE_TAPDISK */
-	struct _mt_vbd_t	*next;	// next entry
-} mt_vbd_t;
-
-// blkback memory pool general entry
-typedef struct _mt_mempool_t {
-	char			*name;	// blkback memory pool name
-	uint32_t		size;	// number of entries in total
-	uint32_t		free;	// number of entries free
-	mt_vbd_t		*vbds;	// list of vbds
-	struct _mt_mempool_t	*next;	// next entry
-} mt_mempool_t;
-
-
-// xsiostat_sysfs interface
-// (see source file for documentation)
+// xsiostat_vbd interface
+int
+vbd_update(xsis_vbd_t *);
 
 int
-mpool_update(mt_mempool_t *mpool, char mpool_field[]);
-
-int
-vbd_bb_update(mt_vbd_t *vbd);
-
-int
-vbd_bt_update(mt_vbd_t *vbd);
-
-#ifdef	MT_USE_TAPDISK
-int
-vbd_td_update(mt_vbd_t *vbd);
-#endif	/* MT_USE_TAPDISK */
+vbds_alloc(xsis_vbds_t *, xsis_flts_t *, xsis_flts_t *);
 
 void
-mpools_clean(mt_mempool_t **);
+vbd_delete(xsis_vbd_t *, xsis_vbds_t *);
+
+void
+vbds_free(xsis_vbds_t *);
+
+// xsiostat_flt interface
+int
+flt_isset(xsis_flts_t *, uint32_t);
 
 int
-vbds_alloc(mt_mempool_t **, int32_t, int32_t);
+flt_add(xsis_flts_t *, uint32_t);
+
+void
+flts_free(xsis_flts_t *);
+
+// From blktap3.h:
+struct blkback_stats {
+    unsigned long long  st_ds_req;
+    unsigned long long  st_f_req;
+    unsigned long long  st_oo_req;
+    unsigned long long  st_rd_req;
+    long long           st_rd_cnt;
+    unsigned long long  st_rd_sect;
+    long long           st_rd_sum_usecs;
+    long long           st_rd_max_usecs;
+    unsigned long long  st_wr_req;
+    long long           st_wr_cnt;
+    unsigned long long  st_wr_sect;
+    long long           st_wr_sum_usecs;
+    long long           st_wr_max_usecs;
+} __attribute__ ((aligned (8)));
+
