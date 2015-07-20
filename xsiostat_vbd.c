@@ -117,6 +117,7 @@ vbd_update(xsis_vbd_t *vbd){
                         ((struct blkback_stats *)(vbd->shmmap))->st_rd_cnt;
     vbd->tdstat.infwr = ((struct blkback_stats *)(vbd->shmmap))->st_wr_req -
                         ((struct blkback_stats *)(vbd->shmmap))->st_wr_cnt;
+    vbd->tdstat.low_mem_mode = ((struct blkback_stats *)(vbd->shmmap))->flags & BT3_LOW_MEMORY_MODE;
 
 out:
     // Return
