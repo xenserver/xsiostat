@@ -94,9 +94,9 @@ main_loop(xsis_vbds_t *vbds){
         // Print header
         if (!header){
             printf("----------------------------------------------------" \
-                   "----------------\n");
+                   "----------------------------------\n");
             printf("  DOM   VBD         r/s        w/s    rMB/s    wMB/s" \
-                   " rAvgQs wAvgQs\n");
+                   " rAvgQs wAvgQs   Low_Mem_Mode\n");
             header = 1;
         }
 
@@ -124,6 +124,7 @@ main_loop(xsis_vbds_t *vbds){
         printf("%6.2f",
                ((float)(vbd->tdstat.wtu_0-vbd->tdstat.wtu_1))/
                (now_diff*1000000));
+        printf("%6d",vbd->tdstat.low_mem_mode);
 
         // Break line
         printf("\n");

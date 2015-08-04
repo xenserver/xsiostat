@@ -20,6 +20,7 @@
 
 // Required headers
 #include <stdint.h>
+#include <stdbool.h>
 #include <unistd.h>
 #include <sys/queue.h>
 
@@ -50,6 +51,7 @@ typedef struct _xsis_tdstat_t {
     uint64_t            wtu_1;          // write ticks in usec last time
     uint32_t            infrd;          // read requests inflight
     uint32_t            infwr;          // write requests inflight
+    bool                low_mem_mode;   // tapdisk low memory mode
 } xsis_tdstat_t;
 
 // VBD general entry
@@ -96,6 +98,8 @@ void
 flts_free(xsis_flts_t *);
 
 // From blktap3.h:
+#define BT3_LOW_MEMORY_MODE 0x0000000000000001
+
 struct blkback_stats {
     unsigned long long  st_ds_req;
     unsigned long long  st_f_req;
@@ -110,5 +114,6 @@ struct blkback_stats {
     unsigned long long  st_wr_sect;
     long long           st_wr_sum_usecs;
     long long           st_wr_max_usecs;
+    unsigned long long  flags;
 } __attribute__ ((aligned (8)));
 
