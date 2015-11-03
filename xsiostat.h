@@ -1,6 +1,6 @@
 /*
  * -----------------------------
- *  XenServer Storage I/O Stats 
+ *  XenServer Storage I/O Stats
  * -----------------------------
  *  xsiostat.h
  * ------------
@@ -24,13 +24,19 @@
 #include <unistd.h>
 #include <sys/queue.h>
 
+#include <blktap/tapdisk-metrics-stats.h>
+typedef struct stats tapdisk_stats;
+
 // Global definitions
 #define XSIS_PROGNAME           "Storage I/O Stats"
 #define XSIS_PROGNAME_LEN       strlen(XSIS_PROGNAME)
 
 #define XSIS_VBD3_DIR           "/dev/shm/"
 #define XSIS_VBD3_BASEFMT       "vbd3-%u-%u" // domid, vbdid
-#define XSIS_VBD3_PATHFMT       XSIS_VBD3_DIR XSIS_VBD3_BASEFMT "/statistics"
+
+#define XSIS_TD3_DIR            "/dev/shm/"
+#define XSIS_TD3_BASEFMT        "td3-%u" // tapdisk pid
+#define XSIS_TD3_PATHFMT        XSIS_TD3_DIR XSIS_TD3_BASEFMT "/vbd-%u-%u" // domid, vbdid
 
 #define	XSIS_INTERVAL           1000    // Default report interval (ms)
 #define	XSIS_SECTOR_SZ          512     // Bytes per sector
@@ -58,6 +64,7 @@ typedef struct _xsis_tdstat_t {
 typedef struct _xsis_vbd_t {
     uint32_t            domid;          // domain id owning this vbd
     uint32_t            vbdid;          // vbd id
+    uint32_t            tdpid;          // tapdisk pid
     int32_t             shmfd;          // shared memory stats fd
     void                *shmmap;        // shared memory stats mapping
     xsis_tdstat_t       tdstat;         // tapdisk stat information
@@ -96,24 +103,3 @@ flt_add(xsis_flts_t *, uint32_t);
 
 void
 flts_free(xsis_flts_t *);
-
-// From blktap3.h:
-#define BT3_LOW_MEMORY_MODE 0x0000000000000001
-
-struct blkback_stats {
-    unsigned long long  st_ds_req;
-    unsigned long long  st_f_req;
-    unsigned long long  st_oo_req;
-    unsigned long long  st_rd_req;
-    long long           st_rd_cnt;
-    unsigned long long  st_rd_sect;
-    long long           st_rd_sum_usecs;
-    long long           st_rd_max_usecs;
-    unsigned long long  st_wr_req;
-    long long           st_wr_cnt;
-    unsigned long long  st_wr_sect;
-    long long           st_wr_sum_usecs;
-    long long           st_wr_max_usecs;
-    unsigned long long  flags;
-} __attribute__ ((aligned (8)));
-
