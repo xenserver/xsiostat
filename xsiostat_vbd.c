@@ -31,10 +31,58 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/queue.h>
+#include <xenstore.h>
 #include "xsiostat.h"
 
 // Global variables
 extern int PAGE_SIZE;
+
+static uint32_t
+vbd_read_tapdisk_pid(uint32_t domid, uint32_t vbdid)
+{
+    // XenStore tapdisk pid path
+    static const char* PATH_FMT = "/local/domain/0/backend/vbd3/%u/%u/kthread-pid";
+
+    // Local variables
+    char *path;                 // Path storage
+    unsigned int len;           // Temp variable
+    void *value;                // Value returned by xs_read
+    uint32_t retvalue = 0;      // Value converted to integer
+
+    // Open Xenstore connection
+    struct xs_handle *handle = xs_open(XS_OPEN_READONLY);
+
+    if (!handle) {
+        perror("xs_open");
+        goto err;
+    }
+
+    // Format tapdisk pid path
+    if (asprintf(&path, PATH_FMT, domid, vbdid) < 0) {
+        perror("asprintf");
+        goto asperr;
+    }
+
+    // Read value
+    value = xs_read(handle, XBT_NULL, path, &len);
+
+    // We don't print error here, as we would always report invalid cdrom entry,
+    // for which there is no tapdisk pid
+    if (!value) {
+        goto readerr;
+    }
+
+    // Convert to int
+    retvalue = atoi((const char *)value);
+
+    free(value);
+readerr:
+    free(path);
+asperr:
+    xs_close(handle);
+err:
+    return retvalue;
+}
 
 static void
 vbd_free(xsis_vbd_t *vbd){
@@ -53,18 +101,27 @@ vbd_open(xsis_vbd_t **vbd, uint32_t domid, uint32_t vbdid){
     // Local variables
     char                *ptr;           // Temporary char pointer
     int                 err = 0;        // Return code
+    uint32_t            tdpid = 0;      // Tapdisk PID
 
     // Allocate new VBD entry
     if (!(*vbd = calloc(1, sizeof(xsis_vbd_t)))){
         perror("calloc");
         goto err;
     }
+
+    // We don't print error here, as we would always report invalid cdrom entry,
+    // for which there is no tapdisk pid
+    tdpid = vbd_read_tapdisk_pid(domid, vbdid);
+    if (!tdpid) {
+        goto err;
+    }
+
     (*vbd)->domid = domid;
     (*vbd)->vbdid = vbdid;
     (*vbd)->shmfd = -1;
 
     // Open stats fd
-    if (asprintf(&ptr, XSIS_VBD3_PATHFMT, domid, vbdid) < 0){
+    if (asprintf(&ptr, XSIS_TD3_PATHFMT, tdpid, domid, vbdid) < 0){
         perror("asprintf");
         goto err;
     }
@@ -82,7 +139,7 @@ vbd_open(xsis_vbd_t **vbd, uint32_t domid, uint32_t vbdid){
 
 out:
     // Return
-    return(err); 
+    return(err);
 
 err:
     vbd_free(*vbd);
@@ -102,26 +159,28 @@ vbd_update(xsis_vbd_t *vbd){
 
     // Update VBD entries based on shm mapping
     vbd->tdstat.rop_1 = vbd->tdstat.rop_0;
-    vbd->tdstat.rop_0 = ((struct blkback_stats *)(vbd->shmmap))->st_rd_req;
+    vbd->tdstat.rop_0 = ((struct tapdisk_stats *)(vbd->shmmap))->read_reqs_submitted;
     vbd->tdstat.rsc_1 = vbd->tdstat.rsc_0;
-    vbd->tdstat.rsc_0 = ((struct blkback_stats *)(vbd->shmmap))->st_rd_sect;
+    vbd->tdstat.rsc_0 = ((struct tapdisk_stats *)(vbd->shmmap))->read_sectors;
     vbd->tdstat.wop_1 = vbd->tdstat.wop_0;
-    vbd->tdstat.wop_0 = ((struct blkback_stats *)(vbd->shmmap))->st_wr_req;
+    vbd->tdstat.wop_0 = ((struct tapdisk_stats *)(vbd->shmmap))->write_reqs_submitted;
     vbd->tdstat.wsc_1 = vbd->tdstat.wsc_0;
-    vbd->tdstat.wsc_0 = ((struct blkback_stats *)(vbd->shmmap))->st_wr_sect;
+    vbd->tdstat.wsc_0 = ((struct tapdisk_stats *)(vbd->shmmap))->write_sectors;
     vbd->tdstat.wtu_1 = vbd->tdstat.wtu_0;
-    vbd->tdstat.wtu_0 = ((struct blkback_stats *)(vbd->shmmap))->st_wr_sum_usecs;
+    vbd->tdstat.wtu_0 = ((struct tapdisk_stats *)(vbd->shmmap))->write_total_ticks;
     vbd->tdstat.rtu_1 = vbd->tdstat.rtu_0;
-    vbd->tdstat.rtu_0 = ((struct blkback_stats *)(vbd->shmmap))->st_rd_sum_usecs;
-    vbd->tdstat.infrd = ((struct blkback_stats *)(vbd->shmmap))->st_rd_req -
-                        ((struct blkback_stats *)(vbd->shmmap))->st_rd_cnt;
-    vbd->tdstat.infwr = ((struct blkback_stats *)(vbd->shmmap))->st_wr_req -
-                        ((struct blkback_stats *)(vbd->shmmap))->st_wr_cnt;
-    vbd->tdstat.low_mem_mode = ((struct blkback_stats *)(vbd->shmmap))->flags & BT3_LOW_MEMORY_MODE;
+    vbd->tdstat.rtu_0 = ((struct tapdisk_stats *)(vbd->shmmap))->read_total_ticks;
+    vbd->tdstat.infrd = ((struct tapdisk_stats *)(vbd->shmmap))->read_reqs_submitted -
+                        ((struct tapdisk_stats *)(vbd->shmmap))->read_reqs_completed;
+    vbd->tdstat.infwr = ((struct tapdisk_stats *)(vbd->shmmap))->write_reqs_submitted -
+                        ((struct tapdisk_stats *)(vbd->shmmap))->write_reqs_completed;
+
+    //Zero for now as we don't have this information in tapdisk stats file
+    vbd->tdstat.low_mem_mode = 0;
 
 out:
     // Return
-    return(err); 
+    return(err);
 
 err:
     err = 1;
@@ -179,7 +238,7 @@ out:
         closedir(dp);
 
     // Return
-    return(err); 
+    return(err);
 
 err:
     err = 1;
