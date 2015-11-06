@@ -4,12 +4,13 @@ OBJS = xsiostat.o xsiostat_vbd.o xsiostat_flt.o
 
 CC = gcc
 CFLAGS = -Wall -O3
+LDFLAGS = -lxenstore
 
 .PHONY: build
 build: $(TARGET)
 
 $(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) -o $@ $+
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $+
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
