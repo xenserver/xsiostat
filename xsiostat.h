@@ -25,7 +25,7 @@
 #include <sys/queue.h>
 
 // Global definitions
-#define XSIS_PROGNAME           "XenServer Storage I/O Stats"
+#define XSIS_PROGNAME           "Storage I/O Stats"
 #define XSIS_PROGNAME_LEN       strlen(XSIS_PROGNAME)
 
 #define XSIS_VBD3_DIR           "/dev/shm/"
